@@ -7,28 +7,33 @@ pub use encoder::Encoder;
 pub enum Error {
     Encode,
     Decode,
+    InvalidPacketSize,
     InvalidFramesPerPacket,
     InvalidCodecConfig,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Channels {
     Mono,
     Stereo,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum FramesPerPacket {
-    One,
-    TwoEquallyCompressed,
-    TwoDifferentlyCompressed,
-    Arbitrary,
+    One,                      // Code 0 packet
+    TwoEquallyCompressed,     // Code 1 packet
+    TwoDifferentlyCompressed, // Code 2 packet
+    Arbitrary,                // Code 3 packet
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum CodecMode {
     SILKOnly,
     Hybrid,
     CELTOnly,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum Bandwidth {
     Narrow,
     Medium,
@@ -37,6 +42,7 @@ enum Bandwidth {
     Full,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum FrameSizeMs {
     TwoPointFive,
     Five,
@@ -46,12 +52,14 @@ enum FrameSizeMs {
     Sixty,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 struct CodecConfig {
     mode: CodecMode,
     bandwidth: Bandwidth,
     frame_size: FrameSizeMs,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct TableOfContentsHeader {
     codec_config: CodecConfig,
     channels: Channels,
