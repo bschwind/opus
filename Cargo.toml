@@ -1,0 +1,13 @@
+[package]
+name = "opus"
+version = "0.1.0"
+authors = ["Brian Schwind <brianmschwind@gmail.com>"]
+edition = "2018"
+repository = "https://github.com/bschwind/opus"
+description = "A pure-Rust Opus encoder/decoder."
+homepage = "https://github.com/bschwind/opus"
+readme = "README.md"
+keywords = ["opus", "audio", "decoder", "encoder"]
+license-file = "MIT"
+
+[dependencies]
