@@ -10,6 +10,8 @@ pub enum Error {
     Decode,
     InvalidPacketSize,
     InvalidFramesPerPacket,
+    InvalidFrameCount,
+    InvalidOpusPadding,
     InvalidCodecConfig,
 }
 

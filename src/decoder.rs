@@ -90,8 +90,80 @@ impl<'a> FrameIterator<'a> {
                 (2, last_frame_size, false)
             },
             FramesPerPacket::Arbitrary => {
-                // TODO(bschwind) - Implement this
-                (7, packet.len(), false)
+                if packet.len() < 2 {
+                    return Err(Error::InvalidPacketSize);
+                }
+
+                let first_byte = packet[0];
+                let num_frames = (first_byte & 0b00111111) as usize;
+                let variable_bit_rate = first_byte & 0b1000000 == 0b1000000;
+                let opus_padding_present = first_byte & 0b0100000 == 0b0100000;
+
+                packet = &packet[1..];
+
+                // TODO - Assert num_frames does not exceed 120ms of audio data.
+                if num_frames == 0 {
+                    return Err(Error::InvalidFrameCount);
+                }
+
+                // Decode the amount of padding bytes, if any.
+                if opus_padding_present {
+                    let mut total_padding_bytes = 0usize;
+
+                    loop {
+                        if packet.is_empty() {
+                            return Err(Error::InvalidOpusPadding);
+                        }
+
+                        match packet[0] {
+                            n @ 0..=254 => {
+                                total_padding_bytes += n as usize;
+                                packet = &packet[1..];
+                                break;
+                            },
+                            255 => {
+                                total_padding_bytes += 254;
+                                packet = &packet[1..];
+                            },
+                        }
+                    }
+
+                    if packet.len() <= total_padding_bytes as usize {
+                        return Err(Error::InvalidPacketSize);
+                    }
+
+                    // Chop off the padding bytes at the end.
+                    packet = &packet[..(packet.len() - total_padding_bytes)];
+                }
+
+                if variable_bit_rate {
+                    for size in sizes.iter_mut().take(num_frames - 1) {
+                        let (frame_size, num_bytes) =
+                            parse_size(packet).ok_or(Error::InvalidPacketSize)?;
+                        if frame_size > packet.len() {
+                            return Err(Error::InvalidPacketSize);
+                        }
+
+                        packet = &packet[num_bytes..];
+                        *size = frame_size;
+                    }
+
+                    (num_frames, packet.len(), false)
+                } else {
+                    if packet.len() % num_frames != 0 {
+                        // The packet is not cleanly divisible by the number of
+                        // constant bit rate encoded frames.
+                        return Err(Error::InvalidPacketSize);
+                    }
+
+                    let frame_size = packet.len() / num_frames;
+
+                    for size in &mut sizes[0..(num_frames - 1)] {
+                        *size = frame_size;
+                    }
+
+                    (num_frames, frame_size, true)
+                }
             },
         };
 
@@ -119,6 +191,7 @@ impl<'a> Iterator for FrameIterator<'a> {
     }
 }
 
+#[derive(Debug)]
 struct OpusFrame<'a> {
     compressed_data: &'a [u8],
 }
@@ -227,4 +300,11 @@ fn test_decode_table_of_contents() {
             frames_per_packet: FramesPerPacket::One,
         }
     );
+}
+
+#[test]
+fn test_decode_f32() {
+    let opus_bytes = include_bytes!("../test_data/sin.opus");
+    let mut decoder = Decoder::new(48_000, Channels::Mono);
+    decoder.decode_f32(opus_bytes).unwrap();
 }
