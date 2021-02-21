@@ -197,3 +197,23 @@ impl TryFrom<u8> for TableOfContentsHeader {
         Ok(TableOfContentsHeader { codec_config, channels, frames_per_packet })
     }
 }
+
+#[test]
+fn test_decode_table_of_contents() {
+    let opus_bytes = include_bytes!("../test_data/sin.opus");
+
+    let toc = TableOfContentsHeader::try_from(opus_bytes[0]).unwrap();
+
+    assert_eq!(
+        toc,
+        TableOfContentsHeader {
+            codec_config: CodecConfig {
+                bandwidth: Bandwidth::Full,
+                frame_size: FrameSizeMs::Ten,
+                mode: CodecMode::CELTOnly,
+            },
+            channels: Channels::Mono,
+            frames_per_packet: FramesPerPacket::One,
+        }
+    );
+}
