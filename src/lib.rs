@@ -4,6 +4,7 @@ mod encoder;
 pub use decoder::Decoder;
 pub use encoder::Encoder;
 
+#[derive(Debug)]
 pub enum Error {
     Encode,
     Decode,

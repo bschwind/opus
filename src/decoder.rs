@@ -54,6 +54,7 @@ struct FrameIterator<'a> {
     toc: &'a TableOfContentsHeader,
     packet: &'a [u8],
     count: usize,
+    current_frame: usize,
     constant_bit_rate: bool,
     sizes: [usize; MAX_FRAME_COUNT_PER_PACKET],
 }
@@ -65,7 +66,7 @@ impl<'a> FrameIterator<'a> {
         let (count, last_frame_size, constant_bit_rate) = match toc.frames_per_packet {
             FramesPerPacket::One => (1, packet.len(), true),
             FramesPerPacket::TwoEquallyCompressed => {
-                if packet.len() & 0b1 == 0b1 {
+                if packet.len() & 0b1 != 0 {
                     return Err(Error::InvalidPacketSize);
                 }
 
@@ -95,8 +96,9 @@ impl<'a> FrameIterator<'a> {
         };
 
         sizes[count - 1] = last_frame_size;
+        let current_frame = 0;
 
-        Ok(Self { toc, packet, count, constant_bit_rate, sizes })
+        Ok(Self { toc, packet, count, current_frame, constant_bit_rate, sizes })
     }
 }
 
@@ -104,7 +106,16 @@ impl<'a> Iterator for FrameIterator<'a> {
     type Item = Result<OpusFrame<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        None
+        if self.current_frame < self.count {
+            let (next_frame, remaining_packet) =
+                self.packet.split_at(self.sizes[self.current_frame]);
+            self.packet = remaining_packet;
+
+            self.current_frame += 1;
+            Some(Ok(OpusFrame::new(next_frame)))
+        } else {
+            None
+        }
     }
 }
 
