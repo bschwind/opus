@@ -191,6 +191,98 @@ impl<'a> Iterator for FrameIterator<'a> {
     }
 }
 
+pub struct RangeDecoder<'a> {
+    frame_data: &'a [u8],
+    // The difference between the high end of the current range
+    // and the actual coded value, minus one
+    val: u32,
+
+    // The size of the current range
+    rng: u32,
+
+    // The leftover bit on the first input byte. The least significant bit.
+    leftover_bit: bool,
+}
+
+impl<'a> RangeDecoder<'a> {
+    pub fn new(mut frame_data: &'a [u8]) -> Self {
+        let first_input_byte = if !frame_data.is_empty() {
+            let first = frame_data[0];
+            frame_data = &frame_data[1..];
+            first
+        } else {
+            0
+        };
+
+        let rng = 128;
+        let val = (127 - (first_input_byte >> 1)) as u32;
+
+        let mut myself = Self { frame_data, rng, val, leftover_bit: first_input_byte & 1 == 1 };
+
+        myself.renormalize();
+
+        myself
+    }
+
+    pub fn decode_u32(&mut self, mut ft: u32) -> u32 {
+        assert!(ft > 1);
+
+        ft -= 1;
+        let ftb = Self::ilog(ft);
+
+        if ftb > 8 {
+            todo!();
+            0
+        } else {
+            todo!();
+            ft += 1;
+            0
+        }
+    }
+
+    fn read_byte(&mut self) -> u8 {
+        if !self.frame_data.is_empty() {
+            let next = self.frame_data[0];
+            self.frame_data = &self.frame_data[1..];
+            next
+        } else {
+            0
+        }
+    }
+
+    fn renormalize(&mut self) {
+        while self.rng <= 2u32.pow(23) {
+            self.rng <<= 8;
+            let next_byte = self.read_byte();
+
+            let sym = next_byte | if self.leftover_bit { 1 } else { 0 };
+            self.leftover_bit = next_byte & 1 == 1;
+
+            self.val = ((self.val << 8) + (255u32 - sym as u32)) & 0x7FFFFFFF;
+        }
+    }
+
+    fn ilog(mut v: u32) -> u32 {
+        let mut ret = !!v;
+        let mut m = !!(v & 0xFFFF0000) << 4;
+
+        v >>= m;
+        ret |= m;
+        m = !!(v & 0xFF00) << 3;
+        v >>= m;
+        ret |= m;
+        m = !!(v & 0xF0) << 2;
+        v >>= m;
+        ret |= m;
+        m = !!(v & 0xC) << 1;
+        v >>= m;
+        ret |= m;
+        ret += !!(v & 0x2);
+
+        ret
+    }
+}
+
 #[derive(Debug)]
 struct OpusFrame<'a> {
     compressed_data: &'a [u8],
