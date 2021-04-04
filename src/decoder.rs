@@ -6,6 +6,13 @@ use std::convert::TryFrom;
 
 const MAX_FRAME_COUNT_PER_PACKET: usize = 48;
 
+// The number of bits to use for the range-coded part of unsigned integers.
+const UINT_BITS: u32 = 8;
+const CODE_BITS: i32 = 32;
+const SYM_BITS: i32 = 8;
+const CODE_EXTRA: i32 = (CODE_BITS - 2) % SYM_BITS + 1;
+const WINDOW_SIZE: i32 = (std::mem::size_of::<u32>() * 8) as i32;
+
 pub struct Decoder {
     sample_rate: u32,
     channels: Channels,
@@ -197,11 +204,38 @@ pub struct RangeDecoder<'a> {
     // and the actual coded value, minus one
     val: u32,
 
-    // The size of the current range
+    // The number of values in the current range
     rng: u32,
+
+    // The saved normalization factor from decode()
+    ext: u32,
+
+    bit_decoder: BitDecoder,
 
     // The leftover bit on the first input byte. The least significant bit.
     leftover_bit: bool,
+}
+
+struct BitDecoder {
+    // Bits that will be read from at the end
+    end_window: u32,
+
+    // Number of valid bits in end_window.
+    num_end_bits: i32,
+
+    // The total number of whole bits read/written
+    // This does not include partial bits currently in the range coder.
+    num_bits_total: i32,
+}
+
+impl Default for BitDecoder {
+    fn default() -> Self {
+        Self {
+            end_window: 0,
+            num_end_bits: 0,
+            num_bits_total: CODE_BITS + 1 - ((CODE_BITS - CODE_EXTRA) / SYM_BITS) * SYM_BITS,
+        }
+    }
 }
 
 impl<'a> RangeDecoder<'a> {
@@ -216,34 +250,117 @@ impl<'a> RangeDecoder<'a> {
 
         let rng = 128;
         let val = (127 - (first_input_byte >> 1)) as u32;
+        let ext = 0;
+        let bit_decoder = BitDecoder::default();
 
-        let mut myself = Self { frame_data, rng, val, leftover_bit: first_input_byte & 1 == 1 };
+        let mut myself = Self {
+            frame_data,
+            rng,
+            val,
+            ext,
+            bit_decoder,
+            leftover_bit: first_input_byte & 1 == 1,
+        };
 
         myself.renormalize();
 
         myself
     }
 
-    pub fn decode_u32(&mut self, mut ft: u32) -> u32 {
-        assert!(ft > 1);
+    // fl = frequency low
+    // fh = frequency high
+    // ft = frequency total
+    fn update(&mut self, fl: u32, fh: u32, ft: u32) {
+        let s: u32 = self.ext * (ft - fh);
+        self.val -= s;
+        self.rng = if fl > 0 { self.ext * (fh - fl) } else { self.rng - s };
 
-        ft -= 1;
-        let ftb = Self::ilog(ft);
+        self.renormalize();
+    }
 
-        if ftb > 8 {
-            todo!();
-            0
+    // frequency_total - The total frequency of the symbols in the alphabet the next symbol was encoded with.
+    pub fn decode_u32(&mut self, mut frequency_total: u32) -> u32 {
+        assert!(frequency_total > 1);
+
+        frequency_total -= 1;
+
+        // The number of bits required to store (frequency_total - 1) in two's complement.
+        let frequency_total_bits = Self::ilog(frequency_total);
+
+        if frequency_total_bits > 8 {
+            // The top 8 bits of t are decoded using temp:
+            let temp = ((frequency_total - 1) >> (frequency_total_bits - 8)) + 1;
+            let t = self.decode(temp);
+
+            // Update decoder state using (t, t+1, ((ft -1) >> (ftb - 8)) + 1)
+            self.update(t, t + 1, temp);
+
+            // The remaining bits are decoded as raw bits.
+            let t = (t << (frequency_total_bits - 8)) | self.decode_bits(frequency_total_bits - 8);
+
+            if t <= frequency_total {
+                return t;
+            }
+
+            // TODO(bschwind) - An error occurred at this point in the code, return a Result
+            frequency_total
         } else {
-            todo!();
-            ft += 1;
-            0
+            frequency_total += 1;
+            let t = self.decode(frequency_total);
+            self.update(t, t + 1, frequency_total);
+            t
         }
+    }
+
+    // TODO(bschwind) - Return a u16 here?
+    fn decode(&mut self, frequency_total: u32) -> u32 {
+        self.ext = self.rng / frequency_total;
+        let s = self.val / self.ext;
+
+        frequency_total - (s + 1).min(frequency_total)
+    }
+
+    fn decode_bits(&mut self, bits: u32) -> u32 {
+        let mut window = self.bit_decoder.end_window;
+        let mut available = self.bit_decoder.num_end_bits;
+
+        if (available as u32) < bits {
+            loop {
+                window |= (self.read_byte_from_end() as u32) << available;
+                available += SYM_BITS;
+
+                if available <= WINDOW_SIZE - SYM_BITS {
+                    break;
+                }
+            }
+        }
+
+        let ret = window & ((1 << bits) - 1);
+
+        window >>= bits;
+        available -= bits as i32;
+
+        self.bit_decoder.end_window = window;
+        self.bit_decoder.num_end_bits = available;
+        self.bit_decoder.num_bits_total += bits as i32;
+
+        ret
     }
 
     fn read_byte(&mut self) -> u8 {
         if !self.frame_data.is_empty() {
             let next = self.frame_data[0];
             self.frame_data = &self.frame_data[1..];
+            next
+        } else {
+            0
+        }
+    }
+
+    fn read_byte_from_end(&mut self) -> u8 {
+        if !self.frame_data.is_empty() {
+            let next = self.frame_data[self.frame_data.len() - 1];
+            self.frame_data = &self.frame_data[..(self.frame_data.len() - 1)];
             next
         } else {
             0
