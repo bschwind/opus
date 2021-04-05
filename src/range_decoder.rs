@@ -84,11 +84,11 @@ impl<'a> RangeDecoder<'a> {
         myself
     }
 
-    fn update(&mut self, frequency_low: u32, frequency_high: u32, frequency_total: u32) {
-        let s: u32 = self.ext * (frequency_total - frequency_high);
+    fn update(&mut self, frequency_low: u16, frequency_high: u16, frequency_total: u16) {
+        let s: u32 = self.ext * (frequency_total - frequency_high) as u32;
         self.val -= s;
         self.rng = if frequency_low > 0 {
-            self.ext * (frequency_high - frequency_low)
+            self.ext * (frequency_high - frequency_low) as u32
         } else {
             self.rng - s
         };
@@ -108,13 +108,14 @@ impl<'a> RangeDecoder<'a> {
         if frequency_total_bits > UINT_BITS {
             // The top 8 bits of t are decoded using temp:
             let temp = ((frequency_total - 1) >> (frequency_total_bits - UINT_BITS)) + 1;
+            let temp = temp as u16;
             let t = self.decode(temp);
 
             // Update decoder state using (t, t+1, ((ft -1) >> (ftb - 8)) + 1)
             self.update(t, t + 1, temp);
 
             // The remaining bits are decoded as raw bits.
-            let t = (t << (frequency_total_bits - UINT_BITS))
+            let t = ((t as u32) << (frequency_total_bits - UINT_BITS))
                 | self.decode_bits(frequency_total_bits - UINT_BITS);
 
             if t <= frequency_total {
@@ -125,18 +126,19 @@ impl<'a> RangeDecoder<'a> {
             frequency_total
         } else {
             frequency_total += 1;
-            let t = self.decode(frequency_total);
-            self.update(t, t + 1, frequency_total);
-            t
+            let t = self.decode(frequency_total as u16);
+            self.update(t, t + 1, frequency_total as u16);
+            t as u32
         }
     }
 
-    // TODO(bschwind) - Return a u16 here?
-    fn decode(&mut self, frequency_total: u32) -> u32 {
+    fn decode(&mut self, frequency_total: u16) -> u16 {
+        let frequency_total = frequency_total as u32;
+
         self.ext = self.rng / frequency_total;
         let s = self.val / self.ext;
 
-        frequency_total - (s + 1).min(frequency_total)
+        (frequency_total - (s + 1).min(frequency_total)) as u16
     }
 
     fn decode_bits(&mut self, bits: u32) -> u32 {
