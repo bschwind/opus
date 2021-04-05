@@ -1,6 +1,6 @@
 mod decoder;
 mod encoder;
-mod range_decoder;
+mod range_coding;
 
 pub use decoder::Decoder;
 pub use encoder::Encoder;

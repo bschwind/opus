@@ -1,5 +1,5 @@
 use crate::{
-    range_decoder::RangeDecoder, Bandwidth, Channels, CodecConfig, CodecMode, Error, FrameSizeMs,
+    range_coding::RangeDecoder, Bandwidth, Channels, CodecConfig, CodecMode, Error, FrameSizeMs,
     FramesPerPacket, TableOfContentsHeader,
 };
 use std::convert::TryFrom;
