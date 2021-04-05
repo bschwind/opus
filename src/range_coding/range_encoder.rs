@@ -34,12 +34,13 @@ impl RangeEncoder {
 
     fn renormalize(&mut self) {
         while self.rng <= CODE_BOTTOM {
-            self.carry_out((self.val >> CODE_SHIFT) as u8);
+            self.carry_out(self.val >> CODE_SHIFT);
         }
     }
 
-    fn carry_out(&mut self, c: u8) {
-        if c as u32 != SYMBOL_MAX {
+    // c is a 9-bit value (8 data bits and 1 carry bit)
+    fn carry_out(&mut self, c: u32) {
+        if c != SYMBOL_MAX {
             let carry = c >> SYMBOL_BITS;
 
             if let Some(rem) = self.rem {
@@ -47,7 +48,7 @@ impl RangeEncoder {
             }
 
             if self.ext > 0 {
-                let sym = ((SYMBOL_MAX + carry as u32) & SYMBOL_MAX) as u8;
+                let sym = ((SYMBOL_MAX + carry) & SYMBOL_MAX) as u8;
 
                 loop {
                     // TODO - Write a byte (sym)
