@@ -8,6 +8,6 @@ description = "A pure-Rust Opus encoder/decoder."
 homepage = "https://github.com/bschwind/opus"
 readme = "README.md"
 keywords = ["opus", "audio", "decoder", "encoder"]
-license-file = "MIT"
+license = "MIT"
 
 [dependencies]
