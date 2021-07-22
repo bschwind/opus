@@ -7,13 +7,13 @@ use std::convert::TryFrom;
 const MAX_FRAME_COUNT_PER_PACKET: usize = 48;
 
 pub struct Decoder {
-    sample_rate: u32,
-    channels: Channels,
+    _sample_rate: u32,
+    _channels: Channels,
 }
 
 impl Decoder {
     pub fn new(sample_rate: u32, channels: Channels) -> Self {
-        Self { sample_rate, channels }
+        Self { _sample_rate: sample_rate, _channels: channels }
     }
 
     pub fn decode_f32(&mut self, data: &[u8]) -> Result<Vec<f32>, Error> {
@@ -55,11 +55,11 @@ fn parse_size(data: &[u8]) -> Option<(usize, usize)> {
 }
 
 struct FrameIterator<'a> {
-    toc: &'a TableOfContentsHeader,
+    _toc: &'a TableOfContentsHeader,
     packet: &'a [u8],
     count: usize,
     current_frame: usize,
-    constant_bit_rate: bool,
+    _constant_bit_rate: bool,
     sizes: [usize; MAX_FRAME_COUNT_PER_PACKET],
 }
 
@@ -174,7 +174,14 @@ impl<'a> FrameIterator<'a> {
         sizes[count - 1] = last_frame_size;
         let current_frame = 0;
 
-        Ok(Self { toc, packet, count, current_frame, constant_bit_rate, sizes })
+        Ok(Self {
+            _toc: toc,
+            packet,
+            count,
+            current_frame,
+            _constant_bit_rate: constant_bit_rate,
+            sizes,
+        })
     }
 }
 
