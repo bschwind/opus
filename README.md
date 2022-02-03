@@ -1,6 +1,6 @@
 # opus
 
-A pure-Rust Opus encoder/decoder.
+A (work-in-progress) pure-Rust Opus encoder/decoder. Please help me.
 
 ## Dependencies
 - cargo
